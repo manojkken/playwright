@@ -790,11 +790,11 @@ export class Frame extends SdkObject<FrameEventMap> {
   context(world: types.World): Promise<dom.FrameExecutionContext> {
     if (this._page.delegate.noUtilityWorld?.())
       world = 'main';
-    return this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
+    return this._page.openScope.race(this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
       if (contextOrDestroyedReason instanceof js.ExecutionContext)
         return contextOrDestroyedReason;
       throw new Error(contextOrDestroyedReason.destroyedReason);
-    });
+    }));
   }
 
   mainContext(): Promise<dom.FrameExecutionContext> {
@@ -1182,7 +1182,7 @@ export class Frame extends SdkObject<FrameEventMap> {
     if (isAbortError(e))
       return true;
     // Always fail on JavaScript errors or when the main connection is closed.
-    if (js.isJavaScriptErrorInEvaluate(e) || isSessionClosedError(e))
+    if (js.isJavaScriptErrorInEvaluate(e) || isSessionClosedError(e) || isTargetClosedError(e))
       return true;
     // Certain errors opt-out of the retries, throw.
     if (dom.isNonRecoverableDOMError(e) || isInvalidSelectorError(e))
