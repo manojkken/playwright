@@ -141,7 +141,7 @@ export class FrameManager {
 
   dispose(error: Error) {
     for (const frame of this._frames.values()) {
-      frame._stopNetworkIdleTimer();
+      frame._onDetached(error.message);
       frame.invalidateNonStallingEvaluations(error);
     }
   }
@@ -790,11 +790,11 @@ export class Frame extends SdkObject<FrameEventMap> {
   context(world: types.World): Promise<dom.FrameExecutionContext> {
     if (this._page.delegate.noUtilityWorld?.())
       world = 'main';
-    return this._page.openScope.race(this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
+    return this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
       if (contextOrDestroyedReason instanceof js.ExecutionContext)
         return contextOrDestroyedReason;
       throw new Error(contextOrDestroyedReason.destroyedReason);
-    }));
+    });
   }
 
   mainContext(): Promise<dom.FrameExecutionContext> {
@@ -1182,7 +1182,7 @@ export class Frame extends SdkObject<FrameEventMap> {
     if (isAbortError(e))
       return true;
     // Always fail on JavaScript errors or when the main connection is closed.
-    if (js.isJavaScriptErrorInEvaluate(e) || isSessionClosedError(e) || isTargetClosedError(e))
+    if (js.isJavaScriptErrorInEvaluate(e) || isSessionClosedError(e))
       return true;
     // Certain errors opt-out of the retries, throw.
     if (dom.isNonRecoverableDOMError(e) || isInvalidSelectorError(e))
@@ -1746,13 +1746,13 @@ export class Frame extends SdkObject<FrameEventMap> {
     progress.setAllowConcurrentOrNestedRaces(false);
   }
 
-  _onDetached() {
+  _onDetached(reason = 'Frame was detached') {
     this._stopNetworkIdleTimer();
-    this._detachedScope.close(new Error('Frame was detached'));
+    this._detachedScope.close(new Error(reason));
     for (const data of this._contextData.values()) {
       if (data.context)
-        data.context.contextDestroyed('Frame was detached');
-      data.contextPromise.resolve({ destroyedReason: 'Frame was detached' });
+        data.context.contextDestroyed(reason);
+      data.contextPromise.resolve({ destroyedReason: reason });
     }
     if (this._parentFrame)
       this._parentFrame._childFrames.delete(this);
